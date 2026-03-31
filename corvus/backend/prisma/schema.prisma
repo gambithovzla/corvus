@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  name        String
+  avatar      String   @default("")
+  color       String   @default("#6366f1")
+  voicePrompts Json    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  posts       Post[]
+}
+
+model Post {
+  id            String   @id @default(cuid())
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id])
+  platform      String
+  contentType   String   @default("post")
+  topic         String
+  content       String
+  hashtags      String   @default("")
+  imageUrl      String   @default("")
+  status        String   @default("draft")
+  scheduledAt   DateTime?
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([status])
+  @@index([platform])
+}

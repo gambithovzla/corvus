@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npx prisma generate && npx prisma db push && node server.js"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[service]
+rootDirectory = "backend"
