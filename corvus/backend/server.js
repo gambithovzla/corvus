@@ -5,24 +5,21 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 
-// Rutas
 app.use('/api/ai', require('./routes/ai.routes'));
 app.use('/api/posts', require('./routes/posts.routes'));
 app.use('/api/profiles', require('./routes/profiles.routes'));
+app.use('/api/x', require('./routes/x.routes'));
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'corvus-backend', timestamp: new Date().toISOString() });
 });
 
-// Ruta raíz
 app.get('/', (req, res) => {
   res.json({
     name: 'CORVUS API',
@@ -35,12 +32,16 @@ app.get('/', (req, res) => {
       postUpdate: 'PATCH /api/posts/:id',
       profiles: 'GET|POST /api/profiles',
       seed: 'POST /api/profiles/seed',
-    }
+      xAuthUrl: 'GET /api/x/auth-url?profileId=...',
+      xCallback: 'GET /api/x/callback',
+      xStatus: 'GET /api/x/status/:profileId',
+      xPreview: 'POST /api/x/preview',
+      xPublish: 'POST /api/x/publish/:postId',
+    },
   });
 });
 
-// Iniciar servidor
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🦅 CORVUS Backend corriendo en puerto ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
+  console.log(`CORVUS Backend corriendo en puerto ${PORT}`);
+  console.log(`Health: http://localhost:${PORT}/health`);
 });

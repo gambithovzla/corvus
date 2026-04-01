@@ -1,5 +1,28 @@
-// URL del backend - en desarrollo usa proxy de Vite, en producción usa la URL de Railway
+// URL del backend - en desarrollo usa proxy de Vite, en produccion usa la URL de Railway
 const API_URL = import.meta.env.VITE_API_URL || '';
+
+async function parseResponse(res) {
+  const contentType = res.headers.get('content-type') || '';
+  let data;
+
+  if (contentType.includes('application/json')) {
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+  } else {
+    const text = await res.text().catch(() => '');
+    data = { error: text || `Error ${res.status}` };
+  }
+
+  if (!res.ok) {
+    const message = data?.error || data?.message || `Error ${res.status}`;
+    throw new Error(message);
+  }
+
+  return data || { success: true };
+}
 
 async function request(path, options = {}) {
   const url = `${API_URL}${path}`;
@@ -8,13 +31,7 @@ async function request(path, options = {}) {
     ...options,
   });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.error || `Error ${res.status}`);
-  }
-
-  return data;
+  return parseResponse(res);
 }
 
 // ===== AI =====
@@ -62,4 +79,26 @@ export async function getProfiles() {
 
 export async function seedProfiles() {
   return request('/api/profiles/seed', { method: 'POST' });
+}
+
+// ===== X =====
+export async function getXAuthUrl(profileId) {
+  return request(`/api/x/auth-url?profileId=${encodeURIComponent(profileId)}`);
+}
+
+export async function getXStatus(profileId) {
+  return request(`/api/x/status/${encodeURIComponent(profileId)}`);
+}
+
+export async function getXPreview(payload) {
+  return request('/api/x/preview', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function publishPostToX(postId) {
+  return request(`/api/x/publish/${encodeURIComponent(postId)}`, {
+    method: 'POST',
+  });
 }

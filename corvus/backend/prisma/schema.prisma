@@ -8,33 +8,45 @@ datasource db {
 }
 
 model Profile {
-  id          String   @id @default(cuid())
-  name        String
-  avatar      String   @default("")
-  color       String   @default("#6366f1")
-  voicePrompts Json    @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  posts       Post[]
+  id              String   @id @default(cuid())
+  name            String
+  avatar          String   @default("")
+  color           String   @default("#6366f1")
+  voicePrompts    Json     @default("{}")
+  xUserId         String?
+  xUsername       String?
+  xAccessToken    String?  @db.Text
+  xRefreshToken   String?  @db.Text
+  xTokenExpiresAt DateTime?
+  xConnectedAt    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  posts           Post[]
+
+  @@index([xUsername])
 }
 
 model Post {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   profileId     String
-  profile       Profile  @relation(fields: [profileId], references: [id])
+  profile       Profile   @relation(fields: [profileId], references: [id])
   platform      String
-  contentType   String   @default("post")
+  contentType   String    @default("post")
   topic         String
   content       String
-  hashtags      String   @default("")
-  imageUrl      String   @default("")
-  status        String   @default("draft")
+  hashtags      String    @default("")
+  imageUrl      String    @default("")
+  status        String    @default("draft")
   scheduledAt   DateTime?
   publishedAt   DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  externalPostId String?
+  threadRootId  String?
+  publishError  String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([profileId])
   @@index([status])
   @@index([platform])
+  @@index([externalPostId])
 }
