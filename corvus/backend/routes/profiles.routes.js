@@ -4,14 +4,40 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
+const SAFE_PROFILE_SELECT = {
+  id: true,
+  name: true,
+  avatar: true,
+  color: true,
+  voicePrompts: true,
+  xUserId: true,
+  xUsername: true,
+  xConnectedAt: true,
+  xTokenExpiresAt: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+function mapProfile(profile) {
+  if (!profile) return profile;
+
+  return {
+    ...profile,
+    xConnected: Boolean(profile.xUsername && profile.xConnectedAt),
+  };
+}
+
 // GET /api/profiles - Listar todas las marcas/perfiles
 router.get('/', async (req, res) => {
   try {
     const profiles = await prisma.profile.findMany({
-      include: { _count: { select: { posts: true } } },
+      select: {
+        ...SAFE_PROFILE_SELECT,
+        _count: { select: { posts: true } },
+      },
       orderBy: { createdAt: 'asc' },
     });
-    res.json({ success: true, data: profiles });
+    res.json({ success: true, data: profiles.map(mapProfile) });
   } catch (error) {
     console.error('Error listando perfiles:', error.message);
     res.status(500).json({ error: 'Error obteniendo perfiles' });
@@ -34,8 +60,9 @@ router.post('/', async (req, res) => {
         color: color || '#6366f1',
         voicePrompts: voicePrompts || {},
       },
+      select: SAFE_PROFILE_SELECT,
     });
-    res.json({ success: true, data: profile });
+    res.json({ success: true, data: mapProfile(profile) });
   } catch (error) {
     console.error('Error creando perfil:', error.message);
     res.status(500).json({ error: 'Error creando perfil' });
