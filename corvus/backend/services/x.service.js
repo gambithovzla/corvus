@@ -48,6 +48,28 @@ function createOAuthClient() {
   return new TwitterApi({ clientId, clientSecret });
 }
 
+function buildStateWithProfileId(profileId) {
+  const payload = {
+    profileId: String(profileId),
+    nonce: crypto.randomBytes(12).toString('hex'),
+  };
+
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function extractProfileIdFromState(state) {
+  if (!state) return null;
+
+  try {
+    const decoded = Buffer.from(String(state), 'base64url').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    if (!parsed || !parsed.profileId) return null;
+    return String(parsed.profileId);
+  } catch (_error) {
+    return null;
+  }
+}
+
 function saveOAuthState({ state, profileId, codeVerifier }) {
   oauthStateStore.set(state, {
     profileId,
@@ -59,12 +81,24 @@ function saveOAuthState({ state, profileId, codeVerifier }) {
 function consumeOAuthState(state) {
   const value = oauthStateStore.get(state);
   oauthStateStore.delete(state);
+  const profileIdFromState = extractProfileIdFromState(state);
 
   if (!value || value.expiresAt <= Date.now()) {
     throw new Error('Estado OAuth expirado o invalido. Vuelve a conectar X.');
   }
 
-  return value;
+  if (!profileIdFromState) {
+    throw new Error('State OAuth invalido: no se encontro profileId');
+  }
+
+  if (String(value.profileId) !== profileIdFromState) {
+    throw new Error('State OAuth invalido: profileId no coincide');
+  }
+
+  return {
+    ...value,
+    profileId: profileIdFromState,
+  };
 }
 
 async function createAuthUrl(profileId) {
@@ -82,14 +116,14 @@ async function createAuthUrl(profileId) {
   }
 
   const { redirectUri, scopes } = getXConfig();
-  const generatedState = crypto.randomBytes(16).toString('hex');
+  const stateWithProfileId = buildStateWithProfileId(profileId);
   const authClient = createOAuthClient();
 
   const { url, state, codeVerifier } = authClient.generateOAuth2AuthLink(
     redirectUri,
     {
       scope: scopes,
-      state: generatedState,
+      state: stateWithProfileId,
     }
   );
 
@@ -108,7 +142,6 @@ async function handleOAuthCallback({ code, state }) {
   const authClient = createOAuthClient();
 
   const {
-    client: loggedClient,
     accessToken,
     refreshToken,
     expiresIn,
@@ -118,32 +151,49 @@ async function handleOAuthCallback({ code, state }) {
     redirectUri,
   });
 
-  const me = await loggedClient.v2.me();
-  const xUserId = me?.data?.id || null;
-  const xUsername = me?.data?.username || null;
+  const meResponse = await fetch('https://api.twitter.com/2/users/me', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!meResponse.ok) {
+    const meErrorBody = await meResponse.text();
+    throw new Error(`No se pudo obtener usuario de X (${meResponse.status}): ${meErrorBody}`);
+  }
+
+  const mePayload = await meResponse.json();
+  const xUserId = mePayload?.data?.id || null;
+  const xUsername = mePayload?.data?.username || null;
   const tokenExpiresAt = expiresIn
     ? new Date(Date.now() + (expiresIn * 1000))
     : null;
 
-  const updatedProfile = await prisma.profile.update({
-    where: { id: profileId },
-    data: {
-      xUserId,
-      xUsername,
-      xAccessToken: accessToken || null,
-      xRefreshToken: refreshToken || null,
-      xTokenExpiresAt: tokenExpiresAt,
-      xConnectedAt: new Date(),
-    },
-    select: {
-      id: true,
-      name: true,
-      xUserId: true,
-      xUsername: true,
-      xConnectedAt: true,
-      xTokenExpiresAt: true,
-    },
-  });
+  let updatedProfile;
+  try {
+    updatedProfile = await prisma.profile.update({
+      where: { id: profileId },
+      data: {
+        xUserId,
+        xUsername,
+        xAccessToken: accessToken || null,
+        xRefreshToken: refreshToken || null,
+        xTokenExpiresAt: tokenExpiresAt,
+        xConnectedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        xUserId: true,
+        xUsername: true,
+        xConnectedAt: true,
+        xTokenExpiresAt: true,
+      },
+    });
+  } catch (error) {
+    console.error(`❌ Error guardando tokens en DB: ${error}`);
+    throw new Error('No se pudieron guardar los tokens de X en la base de datos');
+  }
 
   return updatedProfile;
 }

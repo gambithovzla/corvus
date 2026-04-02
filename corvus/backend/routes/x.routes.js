@@ -46,6 +46,7 @@ router.get('/callback', async (req, res) => {
 
   if (error) {
     return res.redirect(buildRedirectUrl({
+      success: 'false',
       x_connected: '0',
       x_error: `${error}: ${errorDescription || 'autorizacion cancelada'}`,
     }));
@@ -54,12 +55,14 @@ router.get('/callback', async (req, res) => {
   try {
     const profile = await handleOAuthCallback({ code, state });
     return res.redirect(buildRedirectUrl({
+      success: 'true',
       x_connected: '1',
       profileId: profile.id,
       x_username: profile.xUsername || '',
     }));
   } catch (callbackError) {
     return res.redirect(buildRedirectUrl({
+      success: 'false',
       x_connected: '0',
       x_error: callbackError.message || 'error en callback OAuth',
     }));
