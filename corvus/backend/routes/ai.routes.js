@@ -1,11 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Anthropic = require('@anthropic-ai/sdk');
-const { getSystemPromptForProfile } = require('../services/voice.service');
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const { generateContentWithProfile } = require('../services/ai.service');
 
 // POST /api/ai/generate
 router.post('/generate', async (req, res) => {
@@ -16,38 +11,12 @@ router.post('/generate', async (req, res) => {
   }
 
   try {
-    const { profile, systemPrompt } = await getSystemPromptForProfile({
-      profileId,
+    const { profile, parsed, rawText, usage } = await generateContentWithProfile({
       platform,
+      profileId,
       contentType: contentType || 'post',
+      topic,
     });
-
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: `Tema: ${topic}` },
-      ],
-    });
-
-    const rawText = message.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('');
-
-    let parsed;
-    try {
-      const clean = rawText.replace(/```json|```/g, '').trim();
-      parsed = JSON.parse(clean);
-    } catch {
-      parsed = {
-        content: rawText,
-        hashtags: '',
-        imagePrompt: topic,
-        contentNotes: 'Respuesta en texto libre (no JSON)',
-      };
-    }
 
     return res.json({
       success: true,
@@ -58,10 +27,7 @@ router.post('/generate', async (req, res) => {
         contentNotes: parsed.contentNotes || '',
         profileName: profile?.name || null,
       },
-      usage: {
-        inputTokens: message.usage?.input_tokens || 0,
-        outputTokens: message.usage?.output_tokens || 0,
-      },
+      usage,
     });
   } catch (error) {
     console.error('Error generando contenido:', error.message);

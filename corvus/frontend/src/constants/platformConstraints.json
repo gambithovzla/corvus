@@ -1,0 +1,54 @@
+{
+  "instagram": {
+    "name": "Instagram",
+    "icon": "IG",
+    "color": "#E1306C",
+    "bg": "linear-gradient(135deg, #833AB4, #E1306C, #F77737)",
+    "maxChars": 2200,
+    "hashtagLimit": 30,
+    "styleRules": [
+      "Usa saltos de linea para facilitar lectura.",
+      "Incluye un CTA claro al final.",
+      "Usa hashtags relevantes y combinados entre nicho y alcance."
+    ]
+  },
+  "twitter": {
+    "name": "X (Twitter)",
+    "icon": "X",
+    "color": "#000000",
+    "bg": "#000",
+    "maxChars": 280,
+    "hashtagLimit": 5,
+    "styleRules": [
+      "Prioriza frases cortas y contundentes.",
+      "Evita relleno: cada palabra debe aportar.",
+      "Si es hilo, define continuidad entre partes."
+    ]
+  },
+  "tiktok": {
+    "name": "TikTok",
+    "icon": "TT",
+    "color": "#00F2EA",
+    "bg": "linear-gradient(135deg, #00F2EA, #FF0050)",
+    "maxChars": 4000,
+    "hashtagLimit": 8,
+    "styleRules": [
+      "Mantiene ritmo alto desde la primera linea.",
+      "Incluye instrucciones visuales o de corte cuando aplique.",
+      "Termina con CTA de participacion."
+    ]
+  },
+  "youtube": {
+    "name": "YouTube",
+    "icon": "YT",
+    "color": "#FF0000",
+    "bg": "#FF0000",
+    "maxChars": 5000,
+    "hashtagLimit": 15,
+    "styleRules": [
+      "Organiza en bloques de valor progresivo.",
+      "Incluye contexto y aplicacion practica.",
+      "Cierra con resumen y accion recomendada."
+    ]
+  }
+}

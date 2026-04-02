@@ -1,13 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'react-hot-toast';
 import * as api from './lib/api';
+import platformConstraints from './constants/platformConstraints.json';
 
 // ===== CONSTANTS =====
-const PLATFORMS = {
-  instagram: { name: 'Instagram', icon: 'IG', color: '#E1306C', bg: 'linear-gradient(135deg, #833AB4, #E1306C, #F77737)' },
-  twitter: { name: 'X (Twitter)', icon: 'X', color: '#000000', bg: '#000' },
-  tiktok: { name: 'TikTok', icon: 'TT', color: '#00F2EA', bg: 'linear-gradient(135deg, #00F2EA, #FF0050)' },
-  youtube: { name: 'YouTube', icon: 'YT', color: '#FF0000', bg: '#FF0000' },
-};
+const PLATFORMS = platformConstraints;
 
 const CONTENT_TYPES = [
   { id: 'post', label: 'Post con imagen', icon: '[P]' },
@@ -44,18 +41,22 @@ function StatusBadge({ status }) {
   const styles = {
     draft: 'bg-gray-100 text-gray-600 border-gray-200',
     generating: 'bg-green-50 text-green-700 border-green-200 animate-pulse',
+    ai_generated: 'bg-amber-50 text-amber-700 border-amber-200',
     review: 'bg-amber-50 text-amber-700 border-amber-200',
-    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    approved: 'bg-violet-50 text-violet-700 border-violet-200',
     published: 'bg-blue-50 text-blue-700 border-blue-200',
+    failed: 'bg-red-50 text-red-700 border-red-200',
     rejected: 'bg-red-50 text-red-600 border-red-200',
   };
 
   const labels = {
     draft: 'Borrador',
     generating: 'Generando...',
+    ai_generated: 'Pendiente',
     review: 'En revision',
-    approved: 'Aprobado',
+    approved: 'En cola',
     published: 'Publicado',
+    failed: 'Fallido',
     rejected: 'Rechazado',
   };
 
@@ -306,7 +307,7 @@ function CommandInput({
 }
 
 // ===== POST CARD =====
-function PostCard({ post, onAction, onPreview, onPublishToX }) {
+function PostCard({ post, onAction, onPreview, isApproving = false }) {
   const p = PLATFORMS[post.platform];
   const [expanded, setExpanded] = useState(false);
   const contentPreview = post.content.length > 200 && !expanded
@@ -364,22 +365,25 @@ function PostCard({ post, onAction, onPreview, onPublishToX }) {
           </div>
         )}
 
-        {post.status === 'review' && (
+        {(post.status === 'review' || post.status === 'ai_generated') && (
           <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100">
             <button
               onClick={() => onAction(post.id, 'approved')}
-              className="flex-1 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors"
+              disabled={isApproving}
+              className={`flex-1 py-2 rounded-lg text-white text-xs font-semibold transition-colors ${isApproving ? 'bg-violet-300 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600'}`}
             >
-              Aprobar
+              {isApproving ? 'En Cola...' : 'Aprobar'}
             </button>
             <button
               onClick={() => onAction(post.id, 'regenerate')}
+              disabled={isApproving}
               className="flex-1 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-medium transition-colors"
             >
               Regenerar
             </button>
             <button
               onClick={() => onAction(post.id, 'rejected')}
+              disabled={isApproving}
               className="flex-1 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold transition-colors"
             >
               Rechazar
@@ -388,25 +392,22 @@ function PostCard({ post, onAction, onPreview, onPublishToX }) {
         )}
 
         {post.status === 'approved' && post.platform === 'twitter' && (
-          <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2">
+          <div className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-1 gap-2">
             <button
               className="py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold"
               onClick={() => onPreview(post)}
             >
               Ver preview
             </button>
-            <button
-              className="py-2 rounded-lg bg-black text-white text-xs font-bold hover:bg-gray-800"
-              onClick={() => onPublishToX(post)}
-            >
-              Publicar en X
-            </button>
+            <div className="text-[11px] text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2 py-2 text-center">
+              En cola de publicacion. El worker publicara automaticamente.
+            </div>
           </div>
         )}
 
         {post.status === 'approved' && post.platform !== 'twitter' && (
-          <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-500">
-            Publicacion real aun no disponible para esta plataforma en esta fase.
+          <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+            En cola de publicacion. El worker resolvera esta plataforma con el flujo configurado.
           </div>
         )}
       </div>
@@ -414,13 +415,13 @@ function PostCard({ post, onAction, onPreview, onPublishToX }) {
   );
 }
 
-// ===== STATS BAR =====
-function StatsBar({ posts }) {
+// ===== QUEUE STATUS =====
+function QueueStatus({ posts }) {
   const stats = [
-    { label: 'Total', value: posts.length, color: 'text-gray-900' },
-    { label: 'Pendientes', value: posts.filter((p) => p.status === 'review').length, color: 'text-amber-600' },
-    { label: 'Aprobados', value: posts.filter((p) => p.status === 'approved').length, color: 'text-emerald-600' },
+    { label: 'Pendientes de Aprobacion', value: posts.filter((p) => p.status === 'review' || p.status === 'ai_generated').length, color: 'text-amber-600' },
+    { label: 'En Cola', value: posts.filter((p) => p.status === 'approved').length, color: 'text-violet-600' },
     { label: 'Publicados', value: posts.filter((p) => p.status === 'published').length, color: 'text-blue-600' },
+    { label: 'Fallidos', value: posts.filter((p) => p.status === 'failed').length, color: 'text-red-600' },
   ];
 
   return (
@@ -464,10 +465,12 @@ export default function App() {
   const [profiles, setProfiles] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [platformFilter, setPlatformFilter] = useState('all');
   const [view, setView] = useState('command');
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
   const [backendOk, setBackendOk] = useState(null);
+  const [approvingPostIds, setApprovingPostIds] = useState({});
   const [xStatusByProfile, setXStatusByProfile] = useState({});
   const [xConnectingProfileId, setXConnectingProfileId] = useState(null);
   const [previewState, setPreviewState] = useState({
@@ -480,6 +483,13 @@ export default function App() {
 
   const showNotif = (msg, type = 'success') => {
     setNotification({ msg, type });
+    if (type === 'error') {
+      toast.error(msg);
+    } else if (type === 'info') {
+      toast(msg, { icon: 'i' });
+    } else {
+      toast.success(msg);
+    }
     setTimeout(() => setNotification(null), 4500);
   };
 
@@ -519,10 +529,10 @@ export default function App() {
     }
   };
 
-  const reloadPosts = async () => {
+  const reloadPosts = useCallback(async () => {
     const postsRes = await api.getPosts();
     setPosts(postsRes.data || []);
-  };
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -571,7 +581,17 @@ export default function App() {
     }
 
     init();
-  }, []);
+  }, [reloadPosts]);
+
+  useEffect(() => {
+    if (loading || backendOk === false) return undefined;
+
+    const timer = setInterval(() => {
+      reloadPosts().catch(() => {});
+    }, 4000);
+
+    return () => clearInterval(timer);
+  }, [backendOk, loading, reloadPosts]);
 
   const handleGenerate = async ({ platform, profileId, contentType, topic }) => {
     setIsGenerating(true);
@@ -587,7 +607,7 @@ export default function App() {
         topic,
         content: aiRes.data.content,
         hashtags: aiRes.data.hashtags,
-        status: 'review',
+        status: 'ai_generated',
       });
 
       setPosts((prev) => [postRes.data, ...prev]);
@@ -634,23 +654,6 @@ export default function App() {
     });
   };
 
-  const handlePublishToX = async (post) => {
-    try {
-      const response = await api.publishPostToX(post.id);
-      const updatedPost = response.data.post;
-
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? updatedPost : p)));
-      showNotif('Publicado exitosamente en X');
-
-      if (updatedPost?.profileId) {
-        refreshXStatus(updatedPost.profileId, true);
-      }
-    } catch (error) {
-      showNotif(`No se pudo publicar en X: ${error.message}`, 'error');
-      await reloadPosts();
-    }
-  };
-
   const handleAction = async (postId, action) => {
     if (action === 'regenerate') {
       const post = posts.find((p) => p.id === postId);
@@ -672,29 +675,49 @@ export default function App() {
     }
 
     try {
+      if (action === 'approved') {
+        setApprovingPostIds((prev) => ({ ...prev, [postId]: true }));
+      }
+
       const res = await api.updatePost(postId, { status: action });
       setPosts((prev) => prev.map((p) => (p.id === postId ? res.data : p)));
 
       const msgs = {
-        approved: 'Contenido aprobado - listo para publicar',
+        approved: 'Post enviado a la cola de publicacion',
         rejected: 'Contenido rechazado',
       };
       showNotif(msgs[action] || 'Post actualizado', action === 'rejected' ? 'error' : 'success');
     } catch (error) {
       showNotif(`Error actualizando post: ${error.message}`, 'error');
+    } finally {
+      if (action === 'approved') {
+        setApprovingPostIds((prev) => {
+          const next = { ...prev };
+          delete next[postId];
+          return next;
+        });
+      }
     }
   };
 
-  const filteredPosts = useMemo(
-    () => (filter === 'all' ? posts : posts.filter((p) => p.status === filter)),
-    [posts, filter]
-  );
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      const statusMatch = filter === 'all'
+        ? true
+        : filter === 'pending'
+          ? (post.status === 'review' || post.status === 'ai_generated')
+          : post.status === filter;
+      const platformMatch = platformFilter === 'all' ? true : post.platform === platformFilter;
+      return statusMatch && platformMatch;
+    });
+  }, [posts, filter, platformFilter]);
 
   const filters = [
     { key: 'all', label: 'Todos' },
-    { key: 'review', label: 'Pendientes' },
-    { key: 'approved', label: 'Aprobados' },
+    { key: 'pending', label: 'Pendientes' },
+    { key: 'approved', label: 'En Cola' },
     { key: 'published', label: 'Publicados' },
+    { key: 'failed', label: 'Fallidos' },
   ];
 
   if (loading) {
@@ -777,11 +800,11 @@ export default function App() {
         isConnectingX={Boolean(xConnectingProfileId)}
       />
 
-      {posts.length > 0 && <StatsBar posts={posts} />}
+      {posts.length > 0 && <QueueStatus posts={posts} />}
 
       {view === 'feed' && posts.length > 0 && (
         <>
-          <div className="flex gap-1.5 mb-4">
+          <div className="flex gap-1.5 mb-2 flex-wrap">
             {filters.map((f) => (
               <button
                 key={f.key}
@@ -797,6 +820,32 @@ export default function App() {
             ))}
           </div>
 
+          <div className="flex gap-1.5 mb-4 flex-wrap">
+            <button
+              onClick={() => setPlatformFilter('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                platformFilter === 'all'
+                  ? 'bg-gray-100 text-gray-800 border-gray-300'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              Todas las plataformas
+            </button>
+            {Object.entries(PLATFORMS).map(([key, value]) => (
+              <button
+                key={key}
+                onClick={() => setPlatformFilter(key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                  platformFilter === key
+                    ? 'bg-corvus-50 text-corvus-700 border-corvus-200'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                {value.name}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {filteredPosts.map((post) => (
               <PostCard
@@ -804,7 +853,7 @@ export default function App() {
                 post={post}
                 onAction={handleAction}
                 onPreview={handlePreview}
-                onPublishToX={handlePublishToX}
+                isApproving={Boolean(approvingPostIds[post.id])}
               />
             ))}
           </div>

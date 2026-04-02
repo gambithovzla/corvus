@@ -1,6 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const {
+  initializePublishQueue,
+  closePublishQueue,
+} = require('./src/queues/publish.queue');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -44,6 +48,8 @@ app.get('/', (req, res) => {
       posts: 'GET|POST /api/posts',
       postUpdate: 'PATCH /api/posts/:id',
       profiles: 'GET|POST /api/profiles',
+      profileUpdate: 'PATCH /api/profiles/:id',
+      profileRefine: 'PATCH /api/profiles/:id/refine',
       seed: 'POST /api/profiles/seed',
       xAuthUrl: 'GET /api/x/auth-url?profileId=...',
       xCallback: 'GET /api/x/callback',
@@ -54,7 +60,18 @@ app.get('/', (req, res) => {
   });
 });
 
+initializePublishQueue();
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`CORVUS Backend corriendo en puerto ${PORT}`);
   console.log(`Health: http://localhost:${PORT}/health`);
 });
+
+async function shutdown(signal) {
+  console.log(`[Server] Senal recibida (${signal}). Cerrando recursos...`);
+  await closePublishQueue();
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { enqueuePostForPublishing } = require('../src/queues/publish.queue');
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,7 @@ router.get('/', async (req, res) => {
 // POST /api/posts - Crear un post nuevo
 router.post('/', async (req, res) => {
   const { profileId, platform, contentType, topic, content, hashtags, imageUrl, status } = req.body;
+  const normalizedStatus = typeof status === 'string' ? status.toLowerCase() : null;
 
   if (!profileId || !platform || !content) {
     return res.status(400).json({ error: 'Faltan campos requeridos: profileId, platform, content' });
@@ -60,7 +62,7 @@ router.post('/', async (req, res) => {
         content,
         hashtags: hashtags || '',
         imageUrl: imageUrl || '',
-        status: status || 'review',
+        status: normalizedStatus || 'review',
       },
       include: { profile: { select: POST_PROFILE_SELECT } },
     });
@@ -76,6 +78,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   const { id } = req.params;
   const { status, content, hashtags, scheduledAt } = req.body;
+  const normalizedStatus = typeof status === 'string' ? status.toLowerCase() : status;
 
   try {
     const currentPost = await prisma.post.findUnique({
@@ -87,19 +90,22 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Post no encontrado' });
     }
 
-    if (status === 'published' && currentPost.platform === 'twitter') {
+    if (normalizedStatus === 'published' && currentPost.platform === 'twitter') {
       return res.status(400).json({
         error: 'Los posts de Twitter deben publicarse desde /api/x/publish/:postId',
       });
     }
 
     const data = {};
-    if (status) data.status = status;
+    if (normalizedStatus) data.status = normalizedStatus;
     if (content) data.content = content;
     if (hashtags !== undefined) data.hashtags = hashtags;
     if (scheduledAt) data.scheduledAt = new Date(scheduledAt);
-    if (status === 'published') data.publishedAt = new Date();
-    if (status && status !== 'published') data.publishError = null;
+    if (normalizedStatus === 'published') data.publishedAt = new Date();
+    if (normalizedStatus && normalizedStatus !== 'published') {
+      data.publishError = null;
+      data.publishedAt = null;
+    }
 
     const post = await prisma.post.update({
       where: { id },
@@ -107,7 +113,33 @@ router.patch('/:id', async (req, res) => {
       include: { profile: { select: POST_PROFILE_SELECT } },
     });
 
-    res.json({ success: true, data: post });
+    if (normalizedStatus === 'approved') {
+      let queue;
+
+      try {
+        queue = await enqueuePostForPublishing(post.id);
+      } catch (queueError) {
+        await prisma.post.update({
+          where: { id: post.id },
+          data: {
+            status: 'failed',
+            publishError: String(queueError.message || 'No se pudo encolar el post').slice(0, 2000),
+          },
+        });
+
+        return res.status(500).json({
+          error: `No se pudo enviar a la cola de publicacion: ${queueError.message}`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: post,
+        queue,
+      });
+    }
+
+    return res.json({ success: true, data: post });
   } catch (error) {
     console.error('Error actualizando post:', error.message);
     res.status(500).json({ error: 'Error actualizando post' });
