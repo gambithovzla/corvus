@@ -168,7 +168,7 @@ async function enqueuePostForPublishing(postId) {
     throw new Error('postId es requerido para encolar publicacion');
   }
 
-  const jobId = `publish:${postId}`;
+  const jobId = `publish_${postId}`;
   const existingJob = await publishQueue.getJob(jobId);
 
   if (existingJob) {
@@ -181,6 +181,7 @@ async function enqueuePostForPublishing(postId) {
   }
 
   const job = await publishQueue.add(JOB_NAME, { postId }, { jobId });
+  console.log(`[PublishQueue] Trabajo a\u00f1adido a la cola con ID: ${job.id}`);
 
   return {
     jobId: job.id,
