@@ -138,7 +138,15 @@ function ThreadPreviewModal({ previewState, onClose }) {
   );
 }
 
-function XConnectionCard({ profileId, xStatus, isConnectingX, onConnectX, onRefreshXStatus }) {
+function XConnectionCard({
+  profileId,
+  xStatus,
+  isConnectingX,
+  isDisconnectingX,
+  onConnectX,
+  onDisconnectX,
+  onRefreshXStatus,
+}) {
   if (!profileId) return null;
 
   if (xStatus?.connected) {
@@ -147,19 +155,32 @@ function XConnectionCard({ profileId, xStatus, isConnectingX, onConnectX, onRefr
         <div className="text-xs text-emerald-800">
           Conectado en X como <span className="font-bold">@{xStatus.xUsername}</span>
         </div>
-        <button
-          onClick={() => onRefreshXStatus(profileId)}
-          className="text-[11px] px-2 py-1 rounded-md border border-emerald-300 text-emerald-700 hover:bg-emerald-100"
-        >
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onRefreshXStatus(profileId)}
+            className="text-[11px] px-2 py-1 rounded-md border border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+          >
+            Actualizar
+          </button>
+          <button
+            onClick={() => onDisconnectX(profileId)}
+            disabled={isDisconnectingX}
+            className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${
+              isDisconnectingX
+                ? 'border-red-200 bg-red-100 text-red-400 cursor-not-allowed'
+                : 'border-red-200 text-red-600 hover:bg-red-100'
+            }`}
+          >
+            {isDisconnectingX ? 'Desconectando...' : 'Desconectar X'}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 flex items-center justify-between">
-      <div className="text-xs text-gray-600">Este perfil aun no esta conectado a X</div>
+      <div className="text-xs text-gray-600">Este perfil aun no esta conectado</div>
       <button
         onClick={() => onConnectX(profileId)}
         disabled={isConnectingX}
@@ -178,8 +199,10 @@ function CommandInput({
   isGenerating,
   xStatusByProfile,
   onConnectX,
+  onDisconnectX,
   onRefreshXStatus,
-  isConnectingX,
+  xConnectingProfileId,
+  xDisconnectingProfileId,
 }) {
   const [platform, setPlatform] = useState('instagram');
   const [profileId, setProfileId] = useState('');
@@ -271,8 +294,10 @@ function CommandInput({
       <XConnectionCard
         profileId={profileId}
         xStatus={selectedXStatus}
-        isConnectingX={isConnectingX}
+        isConnectingX={xConnectingProfileId === profileId}
+        isDisconnectingX={xDisconnectingProfileId === profileId}
         onConnectX={onConnectX}
+        onDisconnectX={onDisconnectX}
         onRefreshXStatus={onRefreshXStatus}
       />
 
@@ -473,6 +498,7 @@ export default function App() {
   const [approvingPostIds, setApprovingPostIds] = useState({});
   const [xStatusByProfile, setXStatusByProfile] = useState({});
   const [xConnectingProfileId, setXConnectingProfileId] = useState(null);
+  const [xDisconnectingProfileId, setXDisconnectingProfileId] = useState(null);
   const [previewState, setPreviewState] = useState({
     open: false,
     loading: false,
@@ -529,6 +555,32 @@ export default function App() {
     }
   };
 
+  const fetchProfiles = useCallback(async () => {
+    const profilesRes = await api.getProfiles();
+    const profilesData = profilesRes.data || [];
+    setProfiles(profilesData);
+    return profilesData;
+  }, []);
+
+  const handleDisconnectX = async (profileId) => {
+    if (!profileId) return;
+
+    const confirmed = window.confirm('¿Estás seguro de que deseas desconectar esta cuenta?');
+    if (!confirmed) return;
+
+    try {
+      setXDisconnectingProfileId(profileId);
+      const response = await api.disconnectX(profileId);
+      showNotif(response.message || 'Cuenta de X desconectada correctamente');
+      await fetchProfiles();
+      await refreshXStatus(profileId, true);
+    } catch (error) {
+      showNotif(`No se pudo desconectar X: ${error.message}`, 'error');
+    } finally {
+      setXDisconnectingProfileId(null);
+    }
+  };
+
   const reloadPosts = useCallback(async () => {
     const postsRes = await api.getPosts();
     setPosts(postsRes.data || []);
@@ -561,9 +613,7 @@ export default function App() {
 
         await api.seedProfiles();
 
-        const profilesRes = await api.getProfiles();
-        const profilesData = profilesRes.data || [];
-        setProfiles(profilesData);
+        const profilesData = await fetchProfiles();
 
         await reloadPosts();
 
@@ -581,7 +631,7 @@ export default function App() {
     }
 
     init();
-  }, [reloadPosts]);
+  }, [fetchProfiles, reloadPosts]);
 
   useEffect(() => {
     if (loading || backendOk === false) return undefined;
@@ -796,8 +846,10 @@ export default function App() {
         isGenerating={isGenerating}
         xStatusByProfile={xStatusByProfile}
         onConnectX={handleConnectX}
+        onDisconnectX={handleDisconnectX}
         onRefreshXStatus={refreshXStatus}
-        isConnectingX={Boolean(xConnectingProfileId)}
+        xConnectingProfileId={xConnectingProfileId}
+        xDisconnectingProfileId={xDisconnectingProfileId}
       />
 
       {posts.length > 0 && <QueueStatus posts={posts} />}
