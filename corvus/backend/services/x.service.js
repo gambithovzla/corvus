@@ -232,6 +232,35 @@ async function getProfileXStatus(profileId) {
   };
 }
 
+async function disconnectXFromProfile(profileId) {
+  if (!profileId) {
+    throw new Error('profileId es requerido');
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: profileId },
+    select: { id: true },
+  });
+
+  if (!profile) {
+    const error = new Error('Perfil no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  await prisma.profile.update({
+    where: { id: profileId },
+    data: {
+      xUserId: null,
+      xUsername: null,
+      xAccessToken: null,
+      xRefreshToken: null,
+      xTokenExpiresAt: null,
+      xConnectedAt: null,
+    },
+  });
+}
+
 function canAttemptTokenRefresh(profile) {
   return Boolean(
     profile.xRefreshToken
@@ -432,6 +461,7 @@ module.exports = {
   createAuthUrl,
   handleOAuthCallback,
   getProfileXStatus,
+  disconnectXFromProfile,
   createThreadPreview,
   createPreviewFromPost,
   publishPostToX,

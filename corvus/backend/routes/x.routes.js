@@ -4,6 +4,7 @@ const {
   createAuthUrl,
   handleOAuthCallback,
   getProfileXStatus,
+  disconnectXFromProfile,
   createThreadPreview,
   createPreviewFromPost,
   publishPostToX,
@@ -73,6 +74,18 @@ router.get('/status/:profileId', async (req, res) => {
     return res.json({ success: true, data: status });
   } catch (error) {
     return res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/disconnect/:profileId', async (req, res) => {
+  const { profileId } = req.params;
+
+  try {
+    await disconnectXFromProfile(profileId);
+    return res.json({ message: 'Cuenta de X desconectada correctamente' });
+  } catch (error) {
+    const statusCode = error.statusCode || 400;
+    return res.status(statusCode).json({ error: error.message });
   }
 });
 

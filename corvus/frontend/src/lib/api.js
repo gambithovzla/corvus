@@ -104,6 +104,12 @@ export async function getXStatus(profileId) {
   return request(`/api/x/status/${encodeURIComponent(profileId)}`);
 }
 
+export async function disconnectX(profileId) {
+  return request(`/api/x/disconnect/${encodeURIComponent(profileId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getXPreview(payload) {
   return request('/api/x/preview', {
     method: 'POST',
