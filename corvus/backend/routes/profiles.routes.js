@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
+const { refineProfileVoicePrompt } = require('../services/ai.service');
 
 const prisma = new PrismaClient();
 
@@ -10,6 +11,7 @@ const SAFE_PROFILE_SELECT = {
   avatar: true,
   color: true,
   voicePrompts: true,
+  examples: true,
   xUserId: true,
   xUsername: true,
   xConnectedAt: true,
@@ -46,7 +48,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/profiles - Crear un perfil nuevo
 router.post('/', async (req, res) => {
-  const { name, avatar, color, voicePrompts } = req.body;
+  const { name, avatar, color, voicePrompts, examples } = req.body;
 
   if (!name) {
     return res.status(400).json({ error: 'El nombre es requerido' });
@@ -59,6 +61,7 @@ router.post('/', async (req, res) => {
         avatar: avatar || name.substring(0, 2).toUpperCase(),
         color: color || '#6366f1',
         voicePrompts: voicePrompts || {},
+        examples: Array.isArray(examples) ? examples : [],
       },
       select: SAFE_PROFILE_SELECT,
     });
@@ -89,6 +92,98 @@ router.post('/seed', async (req, res) => {
   } catch (error) {
     console.error('Error en seed:', error.message);
     res.status(500).json({ error: 'Error creando perfiles iniciales' });
+  }
+});
+
+// PATCH /api/profiles/:id - Actualizar campos editables del perfil
+router.patch('/:id', async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    avatar,
+    color,
+    voicePrompts,
+    examples,
+  } = req.body || {};
+
+  if (examples !== undefined && !Array.isArray(examples)) {
+    return res.status(400).json({ error: 'examples debe ser un arreglo JSON' });
+  }
+
+  const data = {};
+  if (name !== undefined) data.name = name;
+  if (avatar !== undefined) data.avatar = avatar;
+  if (color !== undefined) data.color = color;
+  if (voicePrompts !== undefined) data.voicePrompts = voicePrompts;
+  if (examples !== undefined) data.examples = examples;
+
+  if (!Object.keys(data).length) {
+    return res.status(400).json({ error: 'No hay campos para actualizar' });
+  }
+
+  try {
+    const profile = await prisma.profile.update({
+      where: { id },
+      data,
+      select: SAFE_PROFILE_SELECT,
+    });
+
+    return res.json({ success: true, data: mapProfile(profile) });
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Perfil no encontrado' });
+    }
+
+    console.error('Error actualizando perfil:', error.message);
+    return res.status(500).json({ error: 'Error actualizando perfil' });
+  }
+});
+
+// PATCH /api/profiles/:id/refine - Refinar prompt de voz con Claude
+router.patch('/:id/refine', async (req, res) => {
+  const { id } = req.params;
+  const { platform = 'instagram', description } = req.body || {};
+
+  if (!description || !String(description).trim()) {
+    return res.status(400).json({ error: 'description es requerido para refinar el prompt' });
+  }
+
+  try {
+    const result = await refineProfileVoicePrompt({
+      profileId: id,
+      platform,
+      userDescription: description,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        profileId: result.profile.id,
+        profileName: result.profile.name,
+        platform: result.platform,
+        refinedPrompt: result.refinedPrompt,
+        voicePrompts: result.profile.voicePrompts,
+        examples: result.profile.examples,
+        updatedAt: result.profile.updatedAt,
+      },
+      usage: result.usage,
+    });
+  } catch (error) {
+    console.error('Error refinando perfil:', error.message);
+
+    if (error.message?.includes('Perfil no encontrado')) {
+      return res.status(404).json({ error: error.message });
+    }
+
+    if (error.status === 401) {
+      return res.status(401).json({ error: 'API Key de Anthropic invalida' });
+    }
+
+    if (error.status === 429) {
+      return res.status(429).json({ error: 'Limite de API alcanzado. Espera un momento.' });
+    }
+
+    return res.status(500).json({ error: `No se pudo refinar el prompt: ${error.message}` });
   }
 });
 

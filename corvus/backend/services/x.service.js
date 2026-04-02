@@ -354,7 +354,7 @@ async function publishPostToX(postId) {
     throw new Error('Solo se permite publicar en X para posts de Twitter');
   }
 
-  if (post.status !== 'approved') {
+  if (String(post.status).toLowerCase() !== 'approved') {
     throw new Error('Solo se pueden publicar posts con estado approved');
   }
 

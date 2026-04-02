@@ -13,6 +13,7 @@ model Profile {
   avatar          String   @default("")
   color           String   @default("#6366f1")
   voicePrompts    Json     @default("{}")
+  examples        Json     @default("[]")
   xUserId         String?
   xUsername       String?
   xAccessToken    String?  @db.Text

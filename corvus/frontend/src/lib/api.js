@@ -81,6 +81,20 @@ export async function seedProfiles() {
   return request('/api/profiles/seed', { method: 'POST' });
 }
 
+export async function updateProfile(profileId, updates) {
+  return request(`/api/profiles/${encodeURIComponent(profileId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function refineProfilePrompt(profileId, { platform, description }) {
+  return request(`/api/profiles/${encodeURIComponent(profileId)}/refine`, {
+    method: 'PATCH',
+    body: JSON.stringify({ platform, description }),
+  });
+}
+
 // ===== X =====
 export async function getXAuthUrl(profileId) {
   return request(`/api/x/auth-url?profileId=${encodeURIComponent(profileId)}`);
