@@ -5,9 +5,22 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const normalizeOrigin = (value) => (value || '').replace(/\/+$/, '');
+const allowedOrigins = [
+  normalizeOrigin(process.env.FRONTEND_URL),
+  'http://localhost:5173',
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 
