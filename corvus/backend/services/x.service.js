@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const { PrismaClient } = require('@prisma/client');
 const { TwitterApi } = require('twitter-api-v2');
 
@@ -48,26 +47,13 @@ function createOAuthClient() {
   return new TwitterApi({ clientId, clientSecret });
 }
 
-function buildStateWithProfileId(profileId) {
-  const payload = {
-    profileId: String(profileId),
-    nonce: crypto.randomBytes(12).toString('hex'),
-  };
-
-  return Buffer.from(JSON.stringify(payload)).toString('base64url');
-}
-
 function extractProfileIdFromState(state) {
-  if (!state) return null;
-
-  try {
-    const decoded = Buffer.from(String(state), 'base64url').toString('utf8');
-    const parsed = JSON.parse(decoded);
-    if (!parsed || !parsed.profileId) return null;
-    return String(parsed.profileId);
-  } catch (_error) {
+  if (!state) {
     return null;
   }
+
+  const profileId = String(state).trim();
+  return profileId || null;
 }
 
 function saveOAuthState({ state, profileId, codeVerifier }) {
@@ -116,7 +102,7 @@ async function createAuthUrl(profileId) {
   }
 
   const { redirectUri, scopes } = getXConfig();
-  const stateWithProfileId = buildStateWithProfileId(profileId);
+  const stateWithProfileId = String(profileId);
   const authClient = createOAuthClient();
 
   const { url, state, codeVerifier } = authClient.generateOAuth2AuthLink(
@@ -171,6 +157,7 @@ async function handleOAuthCallback({ code, state }) {
 
   let updatedProfile;
   try {
+    console.log('Guardando tokens para el perfil:', profileId);
     updatedProfile = await prisma.profile.update({
       where: { id: profileId },
       data: {
@@ -190,8 +177,9 @@ async function handleOAuthCallback({ code, state }) {
         xTokenExpiresAt: true,
       },
     });
+    console.log('\u2705 Tokens guardados exitosamente en la DB');
   } catch (error) {
-    console.error(`❌ Error guardando tokens en DB: ${error}`);
+    console.error(`Error guardando tokens en DB: ${error}`);
     throw new Error('No se pudieron guardar los tokens de X en la base de datos');
   }
 
