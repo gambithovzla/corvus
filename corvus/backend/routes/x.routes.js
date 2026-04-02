@@ -43,6 +43,7 @@ router.get('/auth-url', async (req, res) => {
 
 router.get('/callback', async (req, res) => {
   const { code, state, error, error_description: errorDescription } = req.query;
+  const profileIdFromState = typeof state === 'string' ? state.trim() : '';
 
   if (error) {
     return res.redirect(buildRedirectUrl({
@@ -52,12 +53,20 @@ router.get('/callback', async (req, res) => {
     }));
   }
 
+  if (!profileIdFromState) {
+    return res.redirect(buildRedirectUrl({
+      success: 'false',
+      x_connected: '0',
+      x_error: 'State OAuth invalido: no se encontro profileId',
+    }));
+  }
+
   try {
-    const profile = await handleOAuthCallback({ code, state });
+    const profile = await handleOAuthCallback({ code, state: profileIdFromState });
     return res.redirect(buildRedirectUrl({
       success: 'true',
       x_connected: '1',
-      profileId: profile.id,
+      profileId: profileIdFromState || profile.id,
       x_username: profile.xUsername || '',
     }));
   } catch (callbackError) {
