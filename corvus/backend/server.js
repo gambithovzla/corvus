@@ -5,6 +5,10 @@ const {
   initializePublishQueue,
   closePublishQueue,
 } = require('./src/queues/publish.queue');
+const {
+  startHexaScheduler,
+  stopHexaScheduler,
+} = require('./services/hexa-sync.service');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,6 +36,8 @@ app.use('/api/ai', require('./routes/ai.routes'));
 app.use('/api/posts', require('./routes/posts.routes'));
 app.use('/api/profiles', require('./routes/profiles.routes'));
 app.use('/api/x', require('./routes/x.routes'));
+app.use('/api/sources', require('./routes/sources.routes'));
+app.use('/api/signals', require('./routes/signals.routes'));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'corvus-backend', timestamp: new Date().toISOString() });
@@ -56,11 +62,15 @@ app.get('/', (req, res) => {
       xStatus: 'GET /api/x/status/:profileId',
       xPreview: 'POST /api/x/preview',
       xPublish: 'POST /api/x/publish/:postId',
+      hexaHealth: 'GET /api/sources/hexa/health',
+      hexaSync: 'POST /api/sources/hexa/sync',
+      signals: 'GET /api/signals?source=hexa&kind=...',
     },
   });
 });
 
 initializePublishQueue();
+startHexaScheduler();
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`CORVUS Backend corriendo en puerto ${PORT}`);
@@ -69,6 +79,7 @@ app.listen(PORT, '0.0.0.0', () => {
 
 async function shutdown(signal) {
   console.log(`[Server] Senal recibida (${signal}). Cerrando recursos...`);
+  await stopHexaScheduler();
   await closePublishQueue();
   process.exit(0);
 }

@@ -35,10 +35,10 @@ async function request(path, options = {}) {
 }
 
 // ===== AI =====
-export async function generateContent({ platform, profileId, contentType, topic }) {
+export async function generateContent({ platform, profileId, contentType, topic, signalId }) {
   return request('/api/ai/generate', {
     method: 'POST',
-    body: JSON.stringify({ platform, profileId, contentType, topic }),
+    body: JSON.stringify({ platform, profileId, contentType, topic, signalId }),
   });
 }
 
@@ -121,4 +121,28 @@ export async function publishPostToX(postId) {
   return request(`/api/x/publish/${encodeURIComponent(postId)}`, {
     method: 'POST',
   });
+}
+
+// ===== HEXA SOURCES =====
+export async function getHexaHealth() {
+  return request('/api/sources/hexa/health');
+}
+
+export async function syncHexa(payload = {}) {
+  return request('/api/sources/hexa/sync', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getSignals(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.source) params.set('source', filters.source);
+  if (filters.kind) params.set('kind', filters.kind);
+  if (filters.sourceType) params.set('sourceType', filters.sourceType);
+  if (filters.profileId) params.set('profileId', filters.profileId);
+  if (filters.language) params.set('language', filters.language);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const query = params.toString();
+  return request(`/api/signals${query ? `?${query}` : ''}`);
 }

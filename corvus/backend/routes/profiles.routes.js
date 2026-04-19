@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { refineProfileVoicePrompt } = require('../services/ai.service');
+const { ensureDefaultHexaChannelAccounts } = require('../services/channel-account.service');
 
 const prisma = new PrismaClient();
 
@@ -65,6 +66,7 @@ router.post('/', async (req, res) => {
       },
       select: SAFE_PROFILE_SELECT,
     });
+    await ensureDefaultHexaChannelAccounts(prisma, profile);
     res.json({ success: true, data: mapProfile(profile) });
   } catch (error) {
     console.error('Error creando perfil:', error.message);
@@ -80,15 +82,24 @@ router.post('/seed', async (req, res) => {
       return res.json({ success: true, message: 'Perfiles ya existen', seeded: false });
     }
 
-    const profiles = await prisma.profile.createMany({
-      data: [
-        { name: 'HEXA', avatar: 'H', color: '#6366f1' },
-        { name: 'Marca 2', avatar: 'M2', color: '#0ea5e9' },
-        { name: 'Marca 3', avatar: 'M3', color: '#10b981' },
-      ],
-    });
+    const seededProfiles = await Promise.all([
+      prisma.profile.create({
+        data: { name: 'HEXA', avatar: 'H', color: '#0f172a' },
+        select: SAFE_PROFILE_SELECT,
+      }),
+      prisma.profile.create({
+        data: { name: 'Marca 2', avatar: 'M2', color: '#0ea5e9' },
+        select: SAFE_PROFILE_SELECT,
+      }),
+      prisma.profile.create({
+        data: { name: 'Marca 3', avatar: 'M3', color: '#10b981' },
+        select: SAFE_PROFILE_SELECT,
+      }),
+    ]);
 
-    res.json({ success: true, message: `${profiles.count} perfiles creados`, seeded: true });
+    await ensureDefaultHexaChannelAccounts(prisma, seededProfiles[0]);
+
+    res.json({ success: true, message: `${seededProfiles.length} perfiles creados`, seeded: true });
   } catch (error) {
     console.error('Error en seed:', error.message);
     res.status(500).json({ error: 'Error creando perfiles iniciales' });

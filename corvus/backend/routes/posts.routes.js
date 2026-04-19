@@ -14,6 +14,40 @@ const POST_PROFILE_SELECT = {
   xConnectedAt: true,
 };
 
+const POST_CHANNEL_ACCOUNT_SELECT = {
+  id: true,
+  platform: true,
+  language: true,
+  market: true,
+  label: true,
+  handle: true,
+  status: true,
+  publishMode: true,
+};
+
+const POST_SIGNAL_SELECT = {
+  id: true,
+  source: true,
+  sourceType: true,
+  language: true,
+  title: true,
+  summary: true,
+  editorialKind: true,
+  editorialScore: true,
+  riskLevel: true,
+};
+
+const POST_CONTENT_ITEM_SELECT = {
+  id: true,
+  title: true,
+  language: true,
+  pillar: true,
+  objective: true,
+  riskLevel: true,
+  approvalMode: true,
+  status: true,
+};
+
 // GET /api/posts - Listar posts con filtros
 router.get('/', async (req, res) => {
   const { status, platform, profileId, limit = 50 } = req.query;
@@ -31,7 +65,12 @@ router.get('/', async (req, res) => {
 
     const posts = await prisma.post.findMany({
       where,
-      include: { profile: { select: POST_PROFILE_SELECT } },
+      include: {
+        profile: { select: POST_PROFILE_SELECT },
+        channelAccount: { select: POST_CHANNEL_ACCOUNT_SELECT },
+        sourceSignal: { select: POST_SIGNAL_SELECT },
+        contentItem: { select: POST_CONTENT_ITEM_SELECT },
+      },
       orderBy: { createdAt: 'desc' },
       take: safeLimit,
     });
@@ -45,26 +84,82 @@ router.get('/', async (req, res) => {
 
 // POST /api/posts - Crear un post nuevo
 router.post('/', async (req, res) => {
-  const { profileId, platform, contentType, topic, content, hashtags, imageUrl, status } = req.body;
+  const {
+    profileId,
+    channelAccountId,
+    sourceSignalId,
+    contentItemId,
+    platform,
+    contentType,
+    topic,
+    content,
+    hashtags,
+    imageUrl,
+    status,
+    language,
+    pillar,
+    objective,
+    riskLevel,
+    approvalMode,
+    assetBrief,
+    ctaType,
+    utmTemplate,
+    experimentKey,
+  } = req.body;
   const normalizedStatus = typeof status === 'string' ? status.toLowerCase() : null;
 
-  if (!profileId || !platform || !content) {
-    return res.status(400).json({ error: 'Faltan campos requeridos: profileId, platform, content' });
+  if ((!profileId && !channelAccountId) || !platform || !content) {
+    return res.status(400).json({ error: 'Faltan campos requeridos: profileId|channelAccountId, platform, content' });
   }
 
   try {
+    let resolvedProfileId = profileId;
+
+    if (channelAccountId) {
+      const channelAccount = await prisma.channelAccount.findUnique({
+        where: { id: channelAccountId },
+        select: { id: true, profileId: true, platform: true, language: true },
+      });
+
+      if (!channelAccount) {
+        return res.status(404).json({ error: 'ChannelAccount no encontrado' });
+      }
+
+      resolvedProfileId = resolvedProfileId || channelAccount.profileId;
+      if (resolvedProfileId !== channelAccount.profileId) {
+        return res.status(400).json({ error: 'channelAccountId no pertenece al profileId enviado' });
+      }
+    }
+
     const post = await prisma.post.create({
       data: {
-        profileId,
+        profileId: resolvedProfileId,
+        channelAccountId: channelAccountId || null,
+        sourceSignalId: sourceSignalId || null,
+        contentItemId: contentItemId || null,
         platform,
         contentType: contentType || 'post',
         topic: topic || '',
         content,
         hashtags: hashtags || '',
         imageUrl: imageUrl || '',
+        language: language || null,
+        pillar: pillar || null,
+        objective: objective || null,
+        riskLevel: riskLevel || 'medium',
+        approvalMode: approvalMode || 'manual',
+        assetBrief: assetBrief || {},
+        ctaType: ctaType || null,
+        utmTemplate: utmTemplate || null,
+        experimentKey: experimentKey || null,
         status: normalizedStatus || 'review',
       },
-      include: { profile: { select: POST_PROFILE_SELECT } },
+      include: {
+        profile: { select: POST_PROFILE_SELECT },
+        channelAccount: { select: POST_CHANNEL_ACCOUNT_SELECT },
+        sourceSignal: { select: POST_SIGNAL_SELECT },
+        contentItem: { select: POST_CONTENT_ITEM_SELECT },
+      },
     });
 
     res.json({ success: true, data: post });
@@ -110,7 +205,12 @@ router.patch('/:id', async (req, res) => {
     const post = await prisma.post.update({
       where: { id },
       data,
-      include: { profile: { select: POST_PROFILE_SELECT } },
+      include: {
+        profile: { select: POST_PROFILE_SELECT },
+        channelAccount: { select: POST_CHANNEL_ACCOUNT_SELECT },
+        sourceSignal: { select: POST_SIGNAL_SELECT },
+        contentItem: { select: POST_CONTENT_ITEM_SELECT },
+      },
     });
 
     if (normalizedStatus === 'approved') {

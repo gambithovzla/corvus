@@ -196,11 +196,53 @@ function parseModelJson(rawText, fallbackTopic = '') {
   }
 }
 
+function buildSignalPrompt(signal) {
+  if (!signal) {
+    return '';
+  }
+
+  const payload = signal.payload && typeof signal.payload === 'object'
+    ? signal.payload
+    : {};
+
+  const lines = [
+    'Usa esta senal real de HEXA como contexto editorial principal.',
+    `Tipo de senal: ${signal.sourceType}`,
+    `Kind editorial: ${signal.editorialKind || 'n/a'}`,
+    `Risk level: ${signal.riskLevel || 'medium'}`,
+  ];
+
+  if (signal.title) {
+    lines.push(`Titulo fuente: ${signal.title}`);
+  }
+  if (signal.summary) {
+    lines.push(`Resumen fuente: ${signal.summary}`);
+  }
+
+  if (payload.matchup) lines.push(`Matchup: ${payload.matchup}`);
+  if (payload.pick) lines.push(`Pick: ${payload.pick}`);
+  if (payload.oracle_confidence !== undefined) lines.push(`Oracle confidence: ${payload.oracle_confidence}`);
+  if (payload.bet_value) lines.push(`Bet value: ${payload.bet_value}`);
+  if (payload.result) lines.push(`Resultado: ${payload.result}`);
+  if (payload.alert_flags?.length) {
+    lines.push(`Alert flags: ${payload.alert_flags.slice(0, 6).join(' | ')}`);
+  }
+  if (payload.summary) lines.push(`Postmortem summary: ${payload.summary}`);
+  if (payload.selectedText) lines.push(`Board signal: ${payload.selectedText}`);
+  if (payload.explanation) lines.push(`Insight explanation: ${payload.explanation}`);
+  if (payload.highlights?.externalUrl) lines.push(`Official source link: ${payload.highlights.externalUrl}`);
+  if (payload.matchedPlay?.description) lines.push(`Tracked play: ${payload.matchedPlay.description}`);
+
+  lines.push(`Payload JSON resumido: ${JSON.stringify(payload).slice(0, 1200)}`);
+  return lines.join('\n');
+}
+
 async function generateContentWithProfile({
   platform,
   profileId,
   contentType = 'post',
   topic,
+  signalId,
 }) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY no configurada');
@@ -212,14 +254,41 @@ async function generateContentWithProfile({
     contentType,
   });
 
+  let signal = null;
+  if (signalId) {
+    signal = await prisma.externalSignal.findUnique({
+      where: { id: signalId },
+      select: {
+        id: true,
+        sourceType: true,
+        editorialKind: true,
+        riskLevel: true,
+        language: true,
+        title: true,
+        summary: true,
+        payload: true,
+      },
+    });
+
+    if (!signal) {
+      throw new Error('Signal no encontrada para generar contenido');
+    }
+  }
+
   console.log('[AI] Prompt enviado a Anthropic:');
   console.log(promptContext.systemPrompt);
+
+  const userPrompt = [
+    topic ? `Tema: ${topic}` : null,
+    signal ? buildSignalPrompt(signal) : null,
+    !topic && signal?.title ? `Angulo sugerido: ${signal.title}` : null,
+  ].filter(Boolean).join('\n\n');
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 2048,
     system: promptContext.systemPrompt,
-    messages: [{ role: 'user', content: `Tema: ${topic}` }],
+    messages: [{ role: 'user', content: userPrompt || `Tema: ${topic || 'Genera una pieza basada en la senal disponible'}` }],
   });
 
   const rawText = message.content
@@ -231,6 +300,7 @@ async function generateContentWithProfile({
 
   return {
     profile: promptContext.profile,
+    signal,
     parsed,
     rawText,
     usage: {
