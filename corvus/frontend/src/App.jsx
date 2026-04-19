@@ -825,8 +825,7 @@ export default function App() {
   useEffect(() => {
     async function init() {
       try {
-        const healthRes = await fetch((import.meta.env.VITE_API_URL || '') + '/health');
-        if (!healthRes.ok) throw new Error('Backend no responde');
+        await api.getBackendHealth();
         setBackendOk(true);
 
         const params = new URLSearchParams(window.location.search);

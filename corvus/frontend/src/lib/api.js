@@ -128,6 +128,10 @@ export async function getHexaHealth() {
   return request('/api/sources/hexa/health');
 }
 
+export async function getBackendHealth() {
+  return request('/health');
+}
+
 export async function syncHexa(payload = {}) {
   return request('/api/sources/hexa/sync', {
     method: 'POST',

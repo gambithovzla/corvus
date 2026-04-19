@@ -104,8 +104,43 @@ Abrir: `http://localhost:5173`
 
 ### Vercel (frontend)
 
-- Usa `frontend` como root.
-- Define `VITE_API_URL` apuntando al backend de Railway.
+- El repo ya incluye [vercel.json](</c:/proyectos/Corvus Project/corvus/vercel.json>) con:
+  - `rootDirectory: "frontend"`
+  - rewrite de `/api/*` hacia Railway
+  - rewrite de `/health` hacia Railway
+- Opcion recomendada:
+  - importa este repo en Vercel
+  - deja el root en `corvus`
+  - no necesitas `VITE_API_URL` si quieres usar las rewrites del mismo dominio
+- Si prefieres llamar directo al backend en vez de pasar por rewrites:
+  - define `VITE_API_URL=https://corvus-production-4cd7.up.railway.app`
+
+### Checklist para dejar CORVUS visible en web
+
+1. Desplegar el frontend en Vercel usando la carpeta `corvus`.
+2. Copiar la URL publica de Vercel, por ejemplo `https://corvus-web.vercel.app`.
+3. En Railway, servicio `corvus` backend, actualizar:
+
+```env
+FRONTEND_URL=https://tu-frontend-en-vercel.vercel.app
+```
+
+4. Confirmar que `X_REDIRECT_URI` en Railway siga apuntando al backend de Railway:
+
+```env
+X_REDIRECT_URI=https://corvus-production-4cd7.up.railway.app/api/x/callback
+```
+
+5. Redeploy del backend en Railway para que CORS y el callback final regresen al frontend correcto.
+
+### URLs de prueba despues del deploy
+
+- Frontend:
+  - `https://tu-frontend-en-vercel.vercel.app`
+- Backend proxied desde Vercel:
+  - `https://tu-frontend-en-vercel.vercel.app/health`
+  - `https://tu-frontend-en-vercel.vercel.app/api/sources/hexa/health`
+  - `https://tu-frontend-en-vercel.vercel.app/api/signals?source=hexa`
 
 ## Endpoints principales
 
