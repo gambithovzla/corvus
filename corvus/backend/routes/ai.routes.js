@@ -4,18 +4,19 @@ const { generateContentWithProfile } = require('../services/ai.service');
 
 // POST /api/ai/generate
 router.post('/generate', async (req, res) => {
-  const { platform, profileId, contentType, topic } = req.body;
+  const { platform, profileId, contentType, topic, signalId } = req.body;
 
-  if (!platform || !topic) {
-    return res.status(400).json({ error: 'Faltan campos: platform y topic son requeridos' });
+  if (!platform || (!topic && !signalId)) {
+    return res.status(400).json({ error: 'Faltan campos: platform y (topic o signalId) son requeridos' });
   }
 
   try {
-    const { profile, parsed, rawText, usage } = await generateContentWithProfile({
+    const { profile, signal, parsed, rawText, usage } = await generateContentWithProfile({
       platform,
       profileId,
       contentType: contentType || 'post',
       topic,
+      signalId,
     });
 
     return res.json({
@@ -26,6 +27,8 @@ router.post('/generate', async (req, res) => {
         imagePrompt: parsed.imagePrompt || topic,
         contentNotes: parsed.contentNotes || '',
         profileName: profile?.name || null,
+        signalId: signal?.id || null,
+        signalTitle: signal?.title || null,
       },
       usage,
     });
@@ -33,6 +36,9 @@ router.post('/generate', async (req, res) => {
     console.error('Error generando contenido:', error.message);
 
     if (error.message?.includes('Perfil no encontrado')) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.message?.includes('Signal no encontrada')) {
       return res.status(404).json({ error: error.message });
     }
 

@@ -36,6 +36,7 @@ corvus/
 - [x] Fase 1: Persistencia en PostgreSQL
 - [x] Fase 1: Interfaz de comando central
 - [x] Fase 2: Integracion real con X (OAuth + preview + publicacion)
+- [x] Fase 2.5: Integracion read-only con Content API de HEXA
 - [ ] Fase 2: Calendario visual / Kanban
 - [ ] Fase 3: Instagram (Meta Graph API)
 - [ ] Fase 3: Generacion de imagenes con IA
@@ -51,6 +52,9 @@ DATABASE_URL="postgresql://usuario:password@host:puerto/corvus"
 ANTHROPIC_API_KEY="sk-ant-xxxxx"
 PORT=3001
 FRONTEND_URL="http://localhost:5173"
+REDIS_URL="redis://127.0.0.1:6379"
+HEXA_BASE_URL="https://hexa-v4-production.up.railway.app"
+HEXA_CONTENT_API_KEY=""
 X_CLIENT_ID=""
 X_CLIENT_SECRET=""
 X_REDIRECT_URI="http://localhost:3001/api/x/callback"
@@ -113,6 +117,9 @@ Abrir: `http://localhost:5173`
 - `DELETE /api/posts/:id`
 - `GET|POST /api/profiles`
 - `POST /api/profiles/seed`
+- `GET /api/signals?source=hexa&kind=...`
+- `GET /api/sources/hexa/health`
+- `POST /api/sources/hexa/sync`
 
 ### X (Twitter)
 
@@ -128,3 +135,5 @@ Abrir: `http://localhost:5173`
 - Un post de Twitter solo pasa a `published` cuando X responde exito real.
 - Si falla la publicacion, se guarda `publishError` y el estado no se marca como publicado.
 - La voz de IA ahora se resuelve por `profileId` real en BD (`voicePrompts`) con fallback por defecto.
+- CORVUS puede sincronizar picks, board signals, insights, performance snapshots y referencias de highlights desde HEXA.
+- La sync de HEXA intenta primero `/api/content/v1/*` y, si hace falta, cae en los endpoints legacy del backend de `hexa-v4`.

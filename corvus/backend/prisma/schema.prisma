@@ -23,6 +23,9 @@ model Profile {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   posts           Post[]
+  channelAccounts ChannelAccount[]
+  externalSignals ExternalSignal[]
+  contentItems    ContentItem[]
 
   @@index([xUsername])
 }
@@ -38,6 +41,18 @@ model Post {
   hashtags      String    @default("")
   imageUrl      String    @default("")
   status        String    @default("draft")
+  contentItemId String?
+  channelAccountId String?
+  sourceSignalId String?
+  language      String?
+  pillar        String?
+  objective     String?
+  riskLevel     String    @default("medium")
+  approvalMode  String    @default("manual")
+  assetBrief    Json      @default("{}")
+  ctaType       String?
+  utmTemplate   String?
+  experimentKey String?
   scheduledAt   DateTime?
   publishedAt   DateTime?
   externalPostId String?
@@ -45,9 +60,97 @@ model Post {
   publishError  String?   @db.Text
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id])
+  channelAccount ChannelAccount? @relation(fields: [channelAccountId], references: [id])
+  sourceSignal  ExternalSignal? @relation("PostSourceSignal", fields: [sourceSignalId], references: [id])
 
   @@index([profileId])
   @@index([status])
   @@index([platform])
   @@index([externalPostId])
+  @@index([contentItemId])
+  @@index([channelAccountId])
+  @@index([sourceSignalId])
+}
+
+model ChannelAccount {
+  id              String   @id @default(cuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id])
+  platform        String
+  language        String   @default("es")
+  market          String   @default("global")
+  label           String
+  handle          String?
+  status          String   @default("disconnected")
+  publishMode     String   @default("manual")
+  isPrimary       Boolean  @default(false)
+  metadata        Json     @default("{}")
+  xUserId         String?
+  xUsername       String?
+  xAccessToken    String?  @db.Text
+  xRefreshToken   String?  @db.Text
+  xTokenExpiresAt DateTime?
+  xConnectedAt    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  posts           Post[]
+
+  @@unique([profileId, platform, language, market])
+  @@index([profileId])
+  @@index([platform, language])
+  @@index([xUsername])
+}
+
+model ExternalSignal {
+  id             String   @id @default(cuid())
+  profileId      String
+  profile        Profile  @relation(fields: [profileId], references: [id])
+  source         String   @default("hexa")
+  sourceType     String
+  externalId     String
+  gamePk         Int?
+  language       String?
+  title          String?
+  summary        String?
+  editorialKind  String?
+  editorialScore Int      @default(0)
+  riskLevel      String   @default("medium")
+  payload        Json
+  metadata       Json     @default("{}")
+  dedupeKey      String   @unique
+  importedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  contentItems   ContentItem[]
+  posts          Post[]   @relation("PostSourceSignal")
+
+  @@index([profileId])
+  @@index([source, sourceType])
+  @@index([gamePk])
+  @@index([editorialKind])
+}
+
+model ContentItem {
+  id             String   @id @default(cuid())
+  profileId      String
+  profile        Profile  @relation(fields: [profileId], references: [id])
+  primarySignalId String? @unique
+  primarySignal  ExternalSignal? @relation(fields: [primarySignalId], references: [id])
+  sourceSignalIds Json    @default("[]")
+  title          String
+  summary        String?
+  language       String?
+  pillar         String?
+  objective      String?
+  riskLevel      String   @default("medium")
+  approvalMode   String   @default("manual")
+  status         String   @default("idea")
+  brief          Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  posts          Post[]
+
+  @@index([profileId])
+  @@index([status])
 }

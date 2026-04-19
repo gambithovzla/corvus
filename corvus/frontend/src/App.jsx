@@ -22,6 +22,32 @@ const QUICK_IDEAS = [
   { topic: 'Moneyball en 2026: que cambio y que sigue igual', platform: 'twitter' },
 ];
 
+const SIGNAL_KIND_META = {
+  pick_alert: { label: 'Pick Alert', className: 'bg-red-50 text-red-700 border-red-200' },
+  result_recap: { label: 'Resultado', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  postmortem: { label: 'Postmortem', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  education: { label: 'Educativo', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  hexa_called_it: { label: 'HEXA lo vio', className: 'bg-violet-50 text-violet-700 border-violet-200' },
+  insight: { label: 'Insight', className: 'bg-sky-50 text-sky-700 border-sky-200' },
+  performance_snapshot: { label: 'Performance', className: 'bg-slate-50 text-slate-700 border-slate-200' },
+};
+
+function suggestSignalPlatform(signal) {
+  const editorialKind = signal?.editorialKind;
+  if (editorialKind === 'education') return 'instagram';
+  if (editorialKind === 'hexa_called_it') return 'tiktok';
+  if (editorialKind === 'postmortem') return 'instagram';
+  return 'twitter';
+}
+
+function suggestSignalContentType(signal) {
+  const editorialKind = signal?.editorialKind;
+  if (editorialKind === 'education') return 'infographic';
+  if (editorialKind === 'hexa_called_it') return 'reel';
+  if (editorialKind === 'postmortem') return 'thread';
+  return 'post';
+}
+
 // ===== SMALL COMPONENTS =====
 function PlatformIcon({ platform, size = 28 }) {
   const p = PLATFORMS[platform];
@@ -484,6 +510,184 @@ function QuickIdeas({ profiles, onGenerate, isGenerating }) {
   );
 }
 
+function SignalBadge({ editorialKind }) {
+  const meta = SIGNAL_KIND_META[editorialKind] || { label: editorialKind || 'Signal', className: 'bg-gray-50 text-gray-700 border-gray-200' };
+  return (
+    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${meta.className}`}>
+      {meta.label}
+    </span>
+  );
+}
+
+function RiskBadge({ riskLevel }) {
+  const styles = {
+    low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200',
+    high: 'bg-red-50 text-red-700 border-red-200',
+  };
+
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border ${styles[riskLevel] || styles.medium}`}>
+      {String(riskLevel || 'medium').toUpperCase()}
+    </span>
+  );
+}
+
+function HexaSignalCard({ signal, onGenerateFromSignal, isGenerating, hasProfiles }) {
+  const suggestedPlatform = suggestSignalPlatform(signal);
+  const suggestedType = suggestSignalContentType(signal);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <SignalBadge editorialKind={signal.editorialKind} />
+          <RiskBadge riskLevel={signal.riskLevel} />
+          {signal.language && (
+            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">{signal.language}</span>
+          )}
+        </div>
+        <div className="text-xs text-gray-400 font-semibold">
+          Score {signal.editorialScore ?? 0}
+        </div>
+      </div>
+
+      <div className="text-sm font-bold text-gray-900 leading-snug">
+        {signal.title || 'Senal sin titulo'}
+      </div>
+
+      {signal.summary && (
+        <div className="mt-2 text-xs text-gray-600 leading-relaxed">
+          {signal.summary}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
+        <span>{signal.sourceType}</span>
+        <span>{new Date(signal.importedAt || signal.createdAt).toLocaleString('es', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-3">
+        <div className="text-[11px] text-gray-500">
+          Sugerido: {PLATFORMS[suggestedPlatform]?.name || suggestedPlatform} / {suggestedType}
+        </div>
+        <button
+          onClick={() => onGenerateFromSignal(signal)}
+          disabled={!hasProfiles || isGenerating}
+          className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+            !hasProfiles || isGenerating
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              : 'bg-corvus-600 hover:bg-corvus-700 text-white'
+          }`}
+        >
+          {isGenerating ? 'Generando...' : 'Generar pieza'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HexaSignalsPanel({
+  hexaHealth,
+  signals,
+  syncingHexa,
+  loadingSignals,
+  onSyncHexa,
+  onGenerateFromSignal,
+  isGenerating,
+  hasProfiles,
+}) {
+  const scheduler = hexaHealth?.scheduler;
+  const endpoints = hexaHealth?.endpoints || {};
+  const endpointKeys = Object.keys(endpoints);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-bold text-gray-900">HEXA Source Ops</div>
+            <div className="text-xs text-gray-500 mt-1">
+              Integracion read-only para picks, board, postmortems y storytelling.
+            </div>
+          </div>
+          <button
+            onClick={onSyncHexa}
+            disabled={syncingHexa}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              syncingHexa
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-black text-white hover:bg-gray-800'
+            }`}
+          >
+            {syncingHexa ? 'Sincronizando...' : 'Sync manual'}
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Configuracion</div>
+            <div className={`mt-1 text-sm font-semibold ${hexaHealth?.configured ? 'text-emerald-700' : 'text-red-600'}`}>
+              {hexaHealth?.configured ? 'Lista' : 'Faltan variables'}
+            </div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Ultimo Sync</div>
+            <div className="mt-1 text-sm font-semibold text-gray-800">
+              {scheduler?.lastCompletedAt
+                ? new Date(scheduler.lastCompletedAt).toLocaleString('es', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : 'Sin ejecuciones'}
+            </div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Cadencia ET</div>
+            <div className="mt-1 text-sm font-semibold text-gray-800">
+              {scheduler?.lastCadenceMinutes ? `${scheduler.lastCadenceMinutes} min` : 'Pausa'}
+            </div>
+          </div>
+        </div>
+
+        {endpointKeys.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {endpointKeys.map((key) => (
+              <span
+                key={key}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                  endpoints[key]?.ok
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}
+              >
+                {key}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {loadingSignals ? (
+        <div className="text-sm text-gray-500 py-6 text-center">Cargando señales de HEXA...</div>
+      ) : signals.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400">
+          No hay señales sincronizadas todavía.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {signals.map((signal) => (
+            <HexaSignalCard
+              key={signal.id}
+              signal={signal}
+              onGenerateFromSignal={onGenerateFromSignal}
+              isGenerating={isGenerating}
+              hasProfiles={hasProfiles}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== MAIN APP =====
 export default function App() {
   const [posts, setPosts] = useState([]);
@@ -499,6 +703,10 @@ export default function App() {
   const [xStatusByProfile, setXStatusByProfile] = useState({});
   const [xConnectingProfileId, setXConnectingProfileId] = useState(null);
   const [xDisconnectingProfileId, setXDisconnectingProfileId] = useState(null);
+  const [signals, setSignals] = useState([]);
+  const [loadingSignals, setLoadingSignals] = useState(false);
+  const [syncingHexa, setSyncingHexa] = useState(false);
+  const [hexaHealth, setHexaHealth] = useState(null);
   const [previewState, setPreviewState] = useState({
     open: false,
     loading: false,
@@ -586,6 +794,34 @@ export default function App() {
     setPosts(postsRes.data || []);
   }, []);
 
+  const loadHexaHealth = useCallback(async (silent = false) => {
+    try {
+      const response = await api.getHexaHealth();
+      setHexaHealth(response.data || null);
+    } catch (error) {
+      if (!silent) {
+        showNotif(`No se pudo consultar HEXA: ${error.message}`, 'error');
+      }
+    }
+  }, []);
+
+  const loadSignals = useCallback(async () => {
+    try {
+      setLoadingSignals(true);
+      const hexaProfile = profiles.find((profile) => profile.name === 'HEXA');
+      const response = await api.getSignals({
+        source: 'hexa',
+        profileId: hexaProfile?.id,
+        limit: 24,
+      });
+      setSignals(response.data || []);
+    } catch (error) {
+      showNotif(`No se pudieron cargar señales: ${error.message}`, 'error');
+    } finally {
+      setLoadingSignals(false);
+    }
+  }, [profiles]);
+
   useEffect(() => {
     async function init() {
       try {
@@ -616,6 +852,7 @@ export default function App() {
         const profilesData = await fetchProfiles();
 
         await reloadPosts();
+        await loadHexaHealth(true);
 
         if (callbackProfileId) {
           await refreshXStatus(callbackProfileId, true);
@@ -631,7 +868,12 @@ export default function App() {
     }
 
     init();
-  }, [fetchProfiles, reloadPosts]);
+  }, [fetchProfiles, loadHexaHealth, reloadPosts]);
+
+  useEffect(() => {
+    if (!profiles.length) return;
+    loadSignals().catch(() => {});
+  }, [profiles, loadSignals]);
 
   useEffect(() => {
     if (loading || backendOk === false) return undefined;
@@ -643,20 +885,39 @@ export default function App() {
     return () => clearInterval(timer);
   }, [backendOk, loading, reloadPosts]);
 
-  const handleGenerate = async ({ platform, profileId, contentType, topic }) => {
+  const handleGenerate = async ({ platform, profileId, contentType, topic, signal }) => {
     setIsGenerating(true);
     setView('feed');
 
     try {
-      const aiRes = await api.generateContent({ platform, profileId, contentType, topic });
+      const resolvedTopic = topic || signal?.title || signal?.summary || 'Generar contenido desde señal';
+      const aiRes = await api.generateContent({
+        platform,
+        profileId,
+        contentType,
+        topic: resolvedTopic,
+        signalId: signal?.id,
+      });
 
       const postRes = await api.createPost({
         profileId,
         platform,
         contentType,
-        topic,
+        topic: resolvedTopic,
         content: aiRes.data.content,
         hashtags: aiRes.data.hashtags,
+        sourceSignalId: signal?.id || null,
+        contentItemId: signal?.contentItems?.[0]?.id || null,
+        language: signal?.language || null,
+        pillar: signal?.contentItems?.[0]?.pillar || null,
+        riskLevel: signal?.riskLevel || 'medium',
+        approvalMode: signal?.riskLevel === 'low' ? 'auto_low_only' : 'manual_review',
+        assetBrief: signal ? {
+          sourceTitle: signal.title,
+          sourceSummary: signal.summary,
+          editorialKind: signal.editorialKind,
+          sourceSignalId: signal.id,
+        } : {},
         status: 'ai_generated',
       });
 
@@ -750,6 +1011,42 @@ export default function App() {
     }
   };
 
+  const handleGenerateFromSignal = async (signal) => {
+    const defaultProfile = profiles.find((profile) => profile.name === 'HEXA') || profiles[0];
+    if (!defaultProfile) {
+      showNotif('Necesitas al menos un perfil para generar contenido', 'error');
+      return;
+    }
+
+    await handleGenerate({
+      platform: suggestSignalPlatform(signal),
+      profileId: defaultProfile.id,
+      contentType: suggestSignalContentType(signal),
+      topic: signal.title || signal.summary,
+      signal,
+    });
+  };
+
+  const handleSyncHexa = async () => {
+    const hexaProfile = profiles.find((profile) => profile.name === 'HEXA');
+
+    try {
+      setSyncingHexa(true);
+      const response = await api.syncHexa({
+        profileId: hexaProfile?.id,
+      });
+      showNotif(`HEXA sincronizado: ${Object.values(response.data?.byType || {}).reduce((sum, value) => sum + value, 0)} señales procesadas`);
+      await Promise.all([
+        loadHexaHealth(true),
+        loadSignals(),
+      ]);
+    } catch (error) {
+      showNotif(`No se pudo sincronizar HEXA: ${error.message}`, 'error');
+    } finally {
+      setSyncingHexa(false);
+    }
+  };
+
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
       const statusMatch = filter === 'all'
@@ -824,7 +1121,7 @@ export default function App() {
         </div>
 
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-          {[{ key: 'command', label: 'Command' }, { key: 'feed', label: 'Feed' }].map((v) => (
+          {[{ key: 'command', label: 'Command' }, { key: 'feed', label: 'Feed' }, { key: 'signals', label: 'HEXA' }].map((v) => (
             <button
               key={v.key}
               onClick={() => setView(v.key)}
@@ -928,8 +1225,21 @@ export default function App() {
         <QuickIdeas profiles={profiles} onGenerate={handleGenerate} isGenerating={isGenerating} />
       )}
 
+      {view === 'signals' && (
+        <HexaSignalsPanel
+          hexaHealth={hexaHealth}
+          signals={signals}
+          syncingHexa={syncingHexa}
+          loadingSignals={loadingSignals}
+          onSyncHexa={handleSyncHexa}
+          onGenerateFromSignal={handleGenerateFromSignal}
+          isGenerating={isGenerating}
+          hasProfiles={profiles.length > 0}
+        />
+      )}
+
       <div className="text-center pt-8 text-[10px] text-gray-300 font-medium tracking-wider">
-        CORVUS v2.0 - X INTEGRATION PHASE
+        CORVUS v3.0 - HEXA CONTENT OPS
       </div>
     </div>
   );
