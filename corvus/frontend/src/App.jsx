@@ -812,7 +812,8 @@ export default function App() {
       const response = await api.getSignals({
         source: 'hexa',
         profileId: hexaProfile?.id,
-        limit: 24,
+        limit: 100,
+        sort: 'recent',
       });
       setSignals(response.data || []);
     } catch (error) {

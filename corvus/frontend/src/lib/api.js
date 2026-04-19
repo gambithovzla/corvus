@@ -147,6 +147,7 @@ export async function getSignals(filters = {}) {
   if (filters.profileId) params.set('profileId', filters.profileId);
   if (filters.language) params.set('language', filters.language);
   if (filters.limit) params.set('limit', String(filters.limit));
+  if (filters.sort) params.set('sort', String(filters.sort));
   const query = params.toString();
   return request(`/api/signals${query ? `?${query}` : ''}`);
 }

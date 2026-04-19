@@ -12,6 +12,7 @@ router.get('/', async (req, res) => {
     profileId,
     language,
     limit = 50,
+    sort = 'score',
   } = req.query;
 
   try {
@@ -26,6 +27,16 @@ router.get('/', async (req, res) => {
     if (sourceType) where.sourceType = String(sourceType);
     if (profileId) where.profileId = String(profileId);
     if (language) where.language = String(language);
+
+    const orderBy = String(sort) === 'recent'
+      ? [
+          { importedAt: 'desc' },
+          { editorialScore: 'desc' },
+        ]
+      : [
+          { editorialScore: 'desc' },
+          { importedAt: 'desc' },
+        ];
 
     const signals = await prisma.externalSignal.findMany({
       where,
@@ -49,10 +60,7 @@ router.get('/', async (req, res) => {
           },
         },
       },
-      orderBy: [
-        { editorialScore: 'desc' },
-        { importedAt: 'desc' },
-      ],
+      orderBy,
       take: safeLimit,
     });
 
